@@ -1,16 +1,15 @@
 #!/bin/env python
-import http.client, pdb, socket, ssl, threading, select
-from time import (
-    sleep,
-)  # Needed to prevent busy-waiting for the browser to complete the login process!
-from flexclient.SmartLink import SmartLink
-from flexclient.Radio import Radio
-import flexclient.DataHandler
-import numpy, time
-from sys import exit
 import os
+from sys import exit
+from time import (  # Needed to prevent busy-waiting for the browser to complete the login process!
+    sleep,
+)
+
 import matplotlib.pyplot as plt
-from matplotlib.animation import FuncAnimation
+
+import flexclient.DataHandler
+from flexclient.Radio import Radio
+from flexclient.SmartLink import SmartLink
 
 SERIAL = os.getenv("FLEX_SERIAL_NUMBER", default=None)
 if SERIAL is None:

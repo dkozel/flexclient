@@ -1,16 +1,20 @@
-import http.client, pdb, socket, ssl, threading, select
-from selenium import (
-    webdriver,
-)  # Needed to instantiate a browser whose current URL may be set and read
-from time import (
-    sleep,
-)  # Needed to prevent busy-waiting for the browser to complete the login process!
-from json import (
+import http.client
+import select
+import socket
+import ssl
+import threading
+from json import (  # Only needed if using .loads() instead of manually parsing the final server response
     loads,
-)  # Only needed if using .loads() instead of manually parsing the final server response
+)
 from random import choices  # Used when generating the STATE field
 from string import ascii_letters, digits  # Used when generating the STATE field
+from time import (  # Needed to prevent busy-waiting for the browser to complete the login process!
+    sleep,
+)
 
+from selenium import (  # Needed to instantiate a browser whose current URL may be set and read
+    webdriver,
+)
 
 HOST_FLEX = "smartlink.flexradio.com"
 HOST_Auth = "frtest.auth0.com"
@@ -145,7 +149,7 @@ def SendRegisterApplicationMessageToServer(socket, appName, platform, token):
         + "\n"
     )
     radioString = ""
-    if socket.version() != None:
+    if socket.version() is not None:
         print(socket.version())
         socket.send(command.encode("cp1252"))
         pingThread = PingServer(socket)
@@ -214,7 +218,7 @@ def ParseRadios(radioList):
         "public_upnp_udp_port": None,
     }
     for ra in radioList.split(" "):
-        for txt in desirable_txt.keys():
+        for txt in desirable_txt:
             if txt in ra:
                 desirable_txt[txt] = ra.split("=")[1]
 
@@ -251,8 +255,8 @@ class ReceiveData(threading.Thread):
             for s in readable:
                 data = s.recv(512).decode("cp1252")
                 if data:
-                    ParseRead(data)
-                    # print(data)
+                    # ParseRead(data)  # Function not defined - commenting out
+                    print(data)
                 else:
                     read_socks.remove(s)
 

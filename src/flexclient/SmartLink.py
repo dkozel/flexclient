@@ -1,16 +1,19 @@
-import http.client, pdb, socket, ssl, threading, select, json, os
-from selenium import (
+import json
+import select
+import socket
+import ssl
+import threading
+from datetime import datetime
+from time import sleep
+
+import keyring
+from authlib.integrations.requests_client import OAuth2Session
+from selenium import (  # Needed to instantiate a browser whose current URL may be set and read
     webdriver,
-)  # Needed to instantiate a browser whose current URL may be set and read
+)
 from selenium.webdriver.chrome.service import Service as ChromeService
 from selenium.webdriver.firefox.service import Service as FirefoxService
 from webdriver_manager.chrome import ChromeDriverManager
-from webdriver_manager.firefox import GeckoDriverManager
-from time import sleep
-from authlib.integrations.requests_client import OAuth2Session
-from authlib.oauth2.rfc6749 import OAuth2Token
-import keyring
-from datetime import datetime, timedelta
 
 
 class PingServer(threading.Thread):
@@ -34,7 +37,7 @@ class PingServer(threading.Thread):
         # print("\n...Thread ended...\n")
 
 
-class SmartLink(object):
+class SmartLink:
     """Class which connects and authenticates with the SmartLink Server"""
 
     HOST_FLEX = "smartlink.flexradio.com"
@@ -103,7 +106,9 @@ class SmartLink(object):
     def _load_tokens(self):
         """Load OAuth tokens from secure keyring storage."""
         try:
-            token_json = keyring.get_password(self.KEYRING_SERVICE, self.KEYRING_USERNAME)
+            token_json = keyring.get_password(
+                self.KEYRING_SERVICE, self.KEYRING_USERNAME
+            )
             if token_json:
                 return json.loads(token_json)
         except Exception as e:
@@ -114,7 +119,9 @@ class SmartLink(object):
         """Save OAuth tokens to secure keyring storage."""
         try:
             token_json = json.dumps(token_data)
-            keyring.set_password(self.KEYRING_SERVICE, self.KEYRING_USERNAME, token_json)
+            keyring.set_password(
+                self.KEYRING_SERVICE, self.KEYRING_USERNAME, token_json
+            )
         except Exception as e:
             print(f"Warning: Could not save tokens to keyring: {e}")
 
@@ -142,7 +149,7 @@ class SmartLink(object):
             session = OAuth2Session(
                 client_id=self.CLIENT_ID,
                 token=token_data,
-                token_endpoint=self.TOKEN_URL
+                token_endpoint=self.TOKEN_URL,
             )
             new_token = session.refresh_token(self.TOKEN_URL)
 
@@ -188,7 +195,7 @@ class SmartLink(object):
             if browser == "chromium":
                 try:
                     options.binary_location = "/snap/bin/chromium"
-                except:
+                except Exception:
                     pass  # Fall back to Chrome if Chromium not found
 
             service = ChromeService(ChromeDriverManager().install())
@@ -201,8 +208,9 @@ class SmartLink(object):
 
             # Wait for redirect (user completes login)
             initial_url = driver.current_url
-            while driver.current_url == initial_url or not driver.current_url.startswith(
-                self.REDIRECT_URI
+            while (
+                driver.current_url == initial_url
+                or not driver.current_url.startswith(self.REDIRECT_URI)
             ):
                 sleep(0.5)
 
@@ -252,7 +260,7 @@ class SmartLink(object):
             + "\n"
         )
         radioData = []
-        if self.wrapped_server_sock.version() != None:
+        if self.wrapped_server_sock.version() is not None:
             # print(self.wrapped_server_sock.version())
             print(command)
             self.wrapped_server_sock.send(command.encode("cp1252"))
@@ -291,7 +299,7 @@ class SmartLink(object):
             "public_udp_port": None,
         }
         for ra in radioString.split(" "):
-            for txt in desirable_txt.keys():
+            for txt in desirable_txt:
                 if txt in ra:
                     desirable_txt[txt] = ra.split("=")[1]
 

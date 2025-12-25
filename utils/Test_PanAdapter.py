@@ -1,13 +1,14 @@
-import http.client, pdb, socket, ssl, threading, select
-from time import (
+from time import (  # Needed to prevent busy-waiting for the browser to complete the login process!
     sleep,
-)  # Needed to prevent busy-waiting for the browser to complete the login process!
-from flexclient.SmartLink import SmartLink
-from flexclient.Radio import Radio
-import flexclient.DataHandler
-import numpy, time
+)
+
 import matplotlib.pyplot as plt
+import numpy
 from matplotlib.animation import FuncAnimation
+
+import flexclient.DataHandler
+from flexclient.Radio import Radio
+from flexclient.SmartLink import SmartLink
 
 SERIAL = "1019-9534-6400-6018"  # should be set through user input at startup
 smartlink = SmartLink()

@@ -1,9 +1,11 @@
-import http.client, pdb, socket, ssl, threading, select
-from .Vita import VitaPacket
-from .Slice import Slice
-from .RxRemoteAudioStream import RxRemoteAudioStream
+import select
+import threading
+from struct import iter_unpack, unpack
+
 from .Panafall import Panafall
-from struct import *
+from .RxRemoteAudioStream import RxRemoteAudioStream
+from .Slice import Slice
+from .Vita import VitaPacket
 
 
 class ReceiveData(threading.Thread):
@@ -155,9 +157,9 @@ def ParseResponse(radio, string):
             for key, value in pan_info.items():
                 # For some reason, the radio expects a different term to one it returns for these two ¯\_(ツ)_/¯
                 if key == "xpixels":
-                    setattr(radio.Panafall, "x_pixels", float(value))
+                    radio.Panafall.x_pixels = float(value)
                 elif key == "ypixels":
-                    setattr(radio.Panafall, "y_pixels", float(value))
+                    radio.Panafall.y_pixels = float(value)
                 else:
                     try:
                         val_type = type(getattr(radio.Panafall, key))
@@ -212,15 +214,15 @@ def ParseStatus(radio, string):
             else:
                 setattr(radio.GetSlice(s_id), key, value)
 
-        """ 
-		slice 0 in_use=1 RF_frequency=14.100000 client_handle=0x6D616CE3 index_letter=A rit_on=0 rit_freq=0 xit_on=0 xit_freq=0 rxant=ANT1 
-		mode=USB wide=0 filter_lo=100 filter_hi=2800 step=100 step_list=1,10,50,100,500,1000,2000,3000 agc_mode=med agc_threshold=65 
-		agc_off_level=10 pan=0x40000000 txant=ANT1 loopa=0 loopb=0 qsk=0 dax=1 dax_clients=0 lock=0 tx=1 active=1 audio_level=50 audio_pan=50 
-		audio_mute=0 record=0 play=disabled record_time=0.0 anf=0 anf_level=50 nr=0 nr_level=50 nb=0 nb_level=50 wnb=0 wnb_level=0 apf=0 
-		apf_level=0 squelch=1 squelch_level=20 diversity=0 diversity_parent=0 diversity_child=0 diversity_index=1342177293 
-		ant_list=ANT1,ANT2,RX_A,XVTA mode_list=LSB,USB,AM,CW,DIGL,DIGU,SAM,FM,NFM,DFM,RTTY fm_tone_mode=OFF fm_tone_value=67.0 
-		fm_repeater_offset_freq=0.000000 tx_offset_freq=0.000000 repeater_offset_dir=SIMPLEX fm_tone_burst=0 fm_deviation=5000 
-		dfm_pre_de_emphasis=0 post_demod_low=300 post_demod_high=3300 rtty_mark=2125 rtty_shift=170 digl_offset=2210 digu_offset=1500 
+        """
+		slice 0 in_use=1 RF_frequency=14.100000 client_handle=0x6D616CE3 index_letter=A rit_on=0 rit_freq=0 xit_on=0 xit_freq=0 rxant=ANT1
+		mode=USB wide=0 filter_lo=100 filter_hi=2800 step=100 step_list=1,10,50,100,500,1000,2000,3000 agc_mode=med agc_threshold=65
+		agc_off_level=10 pan=0x40000000 txant=ANT1 loopa=0 loopb=0 qsk=0 dax=1 dax_clients=0 lock=0 tx=1 active=1 audio_level=50 audio_pan=50
+		audio_mute=0 record=0 play=disabled record_time=0.0 anf=0 anf_level=50 nr=0 nr_level=50 nb=0 nb_level=50 wnb=0 wnb_level=0 apf=0
+		apf_level=0 squelch=1 squelch_level=20 diversity=0 diversity_parent=0 diversity_child=0 diversity_index=1342177293
+		ant_list=ANT1,ANT2,RX_A,XVTA mode_list=LSB,USB,AM,CW,DIGL,DIGU,SAM,FM,NFM,DFM,RTTY fm_tone_mode=OFF fm_tone_value=67.0
+		fm_repeater_offset_freq=0.000000 tx_offset_freq=0.000000 repeater_offset_dir=SIMPLEX fm_tone_burst=0 fm_deviation=5000
+		dfm_pre_de_emphasis=0 post_demod_low=300 post_demod_high=3300 rtty_mark=2125 rtty_shift=170 digl_offset=2210 digu_offset=1500
 		post_demod_bypass=0 rfgain=0 tx_ant_list=ANT1,ANT2,XVTA
 		"""
     elif rec_msg.startswith("radio"):
@@ -250,9 +252,9 @@ def ParseStatus(radio, string):
             else:
                 setattr(radio.Panafall, key, value)
         """
-		display pan 0x40000000 client_handle=0xE8360D29 wnb=0 wnb_level=0 wnb_updating=1 band_zoom=0 segment_zoom=0 x_pixels=50 y_pixels=20 
-		center=14.100000 bandwidth=0.200000 min_dbm=-135.00 max_dbm=-40.00 fps=25 average=50 weighted_average=0 rfgain=0 rxant=ANT1 wide=0 
-		loopa=0 loopb=0 band=20 daxiq_channel=0 waterfall=0x42000000 min_bw=0.004920 max_bw=7.372800 xvtr= pre= ant_list=ANT1,ANT2,RX_A,XVTA 
+		display pan 0x40000000 client_handle=0xE8360D29 wnb=0 wnb_level=0 wnb_updating=1 band_zoom=0 segment_zoom=0 x_pixels=50 y_pixels=20
+		center=14.100000 bandwidth=0.200000 min_dbm=-135.00 max_dbm=-40.00 fps=25 average=50 weighted_average=0 rfgain=0 rxant=ANT1 wide=0
+		loopa=0 loopb=0 band=20 daxiq_channel=0 waterfall=0x42000000 min_bw=0.004920 max_bw=7.372800 xvtr= pre= ant_list=ANT1,ANT2,RX_A,XVTA
 		"""
 
 
@@ -433,10 +435,7 @@ def ParsePanadapterPacket(packet, x, y, mindb, maxdb):
 
 def ValidatePacketCount(pkt_id, pkt_cnt):
     Error = False
-    if pkt_cnt == 0:
-        prev_cnt = 15
-    else:
-        prev_cnt = pkt_cnt - 1
+    prev_cnt = 15 if pkt_cnt == 0 else pkt_cnt - 1
 
     if pkt_id == int("8003", 16):
         try:

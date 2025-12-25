@@ -1,7 +1,7 @@
 from queue import Queue
 
 
-class Panafall(object):
+class Panafall:
     """class for a Panafall display object"""
 
     def __init__(self, radio, p_id, w_id, freq, x, y):

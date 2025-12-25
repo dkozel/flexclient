@@ -1,9 +1,11 @@
-import http.client, pdb, socket, ssl, threading, select
-from .Slice import Slice
+import socket
+import ssl
+
 from .Panafall import Panafall
+from .Slice import Slice
 
 
-class Radio(object):
+class Radio:
     cmdCnt = 0
     """ Class to create connection with FLEX radio and establish communication channel """
 
@@ -95,9 +97,9 @@ class Radio(object):
 
     def SendCommand(self, string):
         self.cmdCnt += 1
-        self.ResponseList[
-            self.cmdCnt
-        ] = string  # expecting a response back from the radio regarding this command
+        self.ResponseList[self.cmdCnt] = (
+            string  # expecting a response back from the radio regarding this command
+        )
         print("C" + str(self.cmdCnt) + "|" + string)
         command = ("C" + str(self.cmdCnt) + "|" + string + "\n").encode("cp1252")
         self.FLEX_Sock.send(command)

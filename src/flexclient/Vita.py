@@ -1,4 +1,4 @@
-class VitaPacket(object):
+class VitaPacket:
     """class to parse a vita packet"""
 
     def __init__(self, data):

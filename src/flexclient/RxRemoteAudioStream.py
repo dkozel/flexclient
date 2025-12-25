@@ -1,9 +1,10 @@
-from numpy import array
 from queue import Queue
+
+from numpy import array
 from scipy.io.wavfile import write
 
 
-class RxRemoteAudioStream(object):
+class RxRemoteAudioStream:
     """class for a RX Remote Audio Stream"""
 
     def __init__(self, radio, stream_id, isCompressed):
@@ -27,7 +28,7 @@ class RxRemoteAudioStream(object):
     def WriteToFile(self):
         temp = []
         samplerate = 24000
-        for i in range(self.outBuffer.qsize()):
+        for _i in range(self.outBuffer.qsize()):
             temp.append(self.outBuffer.get())
 
         wavArr = array(temp, dtype=float)

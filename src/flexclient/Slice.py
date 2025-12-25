@@ -1,7 +1,7 @@
 import itertools
 
 
-class Slice(object):
+class Slice:
     """A Class to create, remove and alter radio frequency slices"""
 
     Id_iter = (
