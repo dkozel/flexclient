@@ -1,15 +1,16 @@
-import http.client, pdb, socket, ssl, threading, select
+import http.client, pdb, socket, ssl, threading, select, json, os
 from selenium import (
     webdriver,
 )  # Needed to instantiate a browser whose current URL may be set and read
-from time import (
-    sleep,
-)  # Needed to prevent busy-waiting for the browser to complete the login process!
-from json import (
-    loads,
-)  # Only needed if using .loads() instead of manually parsing the final server response
-from random import choices  # Used when generating the STATE field
-from string import ascii_letters, digits  # Used when generating the STATE field
+from selenium.webdriver.chrome.service import Service as ChromeService
+from selenium.webdriver.firefox.service import Service as FirefoxService
+from webdriver_manager.chrome import ChromeDriverManager
+from webdriver_manager.firefox import GeckoDriverManager
+from time import sleep
+from authlib.integrations.requests_client import OAuth2Session
+from authlib.oauth2.rfc6749 import OAuth2Token
+import keyring
+from datetime import datetime, timedelta
 
 
 class PingServer(threading.Thread):
@@ -23,7 +24,12 @@ class PingServer(threading.Thread):
     def run(self):
         # print("\n...Thread started...\n")
         while self.running:
-            self.socket.send("ping from client\n".encode("cp1252"))
+            try:
+                self.socket.send("ping from client\n".encode("cp1252"))
+            except (ssl.SSLEOFError, OSError, BrokenPipeError) as e:
+                # Socket closed or connection lost, stop pinging
+                print(f"Ping thread: connection lost ({e}), stopping pings")
+                break
             sleep(5)
         # print("\n...Thread ended...\n")
 
@@ -33,134 +39,202 @@ class SmartLink(object):
 
     HOST_FLEX = "smartlink.flexradio.com"
     HOST_Auth = "frtest.auth0.com"
-    REDIRECT_URI = "https://" + HOST_Auth + "/mobile"
+    AUTH_URL = "https://frtest.auth0.com/authorize"
+    TOKEN_URL = "https://frtest.auth0.com/oauth/token"
+    REDIRECT_URI = "https://frtest.auth0.com/mobile"
     CLIENT_ID = (
         "4Y9fEIIsVYyQo5u6jr7yBWc4lV5ugC2m"  # was "C1br1uk8UecHZnUGlIFt1yp62ZNizey3"
     )
-    SCOPE_LIST = ["openid", "profile"]
-    BROWSER = "chrome"
+    SCOPE_LIST = ["openid", "profile", "offline_access"]
+    BROWSER = "firefox"
     OS = "Windows_NT"
+    KEYRING_SERVICE = "flexclient"
+    KEYRING_USERNAME = "oauth_tokens"
 
-    def __init__(self):
+    def __init__(self, browser="firefox", force_login=False):
+        """
+        Initialize SmartLink connection with cached or new OAuth tokens.
+
+        Args:
+            browser: Browser to use for login ('firefox' or 'chrome')
+            force_login: If True, ignore cached tokens and force browser login
+        """
+        # Try to load cached tokens first
+        token_data = None
+        if not force_login:
+            token_data = self._load_tokens()
+            if token_data:
+                print("Using cached authentication tokens")
+                # Try to refresh if expired
+                if self._is_token_expired(token_data):
+                    print("Token expired, attempting refresh...")
+                    token_data = self._refresh_tokens(token_data)
+                    if not token_data:
+                        print("Refresh failed, will re-authenticate")
+
+        # If no valid cached tokens, do browser login
+        if not token_data:
+            print("Starting browser-based authentication...")
+            token_data = self.get_auth0_tokens(browser)
+            if token_data:
+                self._save_tokens(token_data)
+                print("Authentication successful, tokens cached")
+
+        if not token_data:
+            raise Exception("Authentication failed - no valid tokens obtained")
+
+        # After authentication, connect to SmartLink server
         context = ssl.create_default_context()
         self.server_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.wrapped_server_sock = ssl.wrap_socket(self.server_sock)
+        self.wrapped_server_sock = context.wrap_socket(
+            self.server_sock, server_hostname=self.HOST_FLEX
+        )
         self.wrapped_server_sock.connect((self.HOST_FLEX, 443))
 
+        # Start ping thread after connection is established
         self.pingThread = PingServer(self.wrapped_server_sock)
         self.pingThread.start()
 
-        token_data = self.get_auth0_tokens(
-            self.HOST_Auth,
-            self.CLIENT_ID,
-            self.REDIRECT_URI,
-            self.SCOPE_LIST,
-            self.BROWSER,
-        )
-        # token_data = {}
-        # with open("token.txt", "r") as infile:
-        # 	token_data['id_token'] = infile.readline()
-
+        # Send registration command immediately while connection is fresh
         self.radio_list = self.SendRegisterApplicationMessageToServer(
             "flexclient", self.OS, token_data["id_token"]
         )
 
-    # Takes a hostname as input, and attempts auth0 authentication using a web browser.
-    #  The browser is set to Firefox() currently, but can be any which the Selenium module supports (e.g. Chrome()).
-    #  The output is None for an unsuccessful login, or the response dictionary for a successful one.
-    #  The token required by smartlink.flexradio.com is stored under the key "id_token".
-    def get_auth0_tokens(self, host, client_id, redirect_uri, scope_list, browser):
-        """Author - David Humphreys"""
+    def _load_tokens(self):
+        """Load OAuth tokens from secure keyring storage."""
+        try:
+            token_json = keyring.get_password(self.KEYRING_SERVICE, self.KEYRING_USERNAME)
+            if token_json:
+                return json.loads(token_json)
+        except Exception as e:
+            print(f"Warning: Could not load cached tokens: {e}")
+        return None
 
-        """ to hide non-harmful error """
-        options = webdriver.ChromeOptions()
-        options.add_experimental_option("excludeSwitches", ["enable-logging"])
-        """ """
-        browsers = {
-            "chrome": webdriver.Chrome(options=options)
-        }  # ,'firefox' : webdriver.Firefox(executable_path=GeckoDriverManager().install()) }
-        scope = "%20".join(scope_list)
-        state_len = 16
-        state = "".join(
-            choices(ascii_letters + digits, k=state_len)
-        )  # was "ypfolheqwpezrxdb" when testing
+    def _save_tokens(self, token_data):
+        """Save OAuth tokens to secure keyring storage."""
+        try:
+            token_json = json.dumps(token_data)
+            keyring.set_password(self.KEYRING_SERVICE, self.KEYRING_USERNAME, token_json)
+        except Exception as e:
+            print(f"Warning: Could not save tokens to keyring: {e}")
 
-        conn = http.client.HTTPSConnection(host)
-        # print(conn)
-        # Step 1: request an auth0 code
-        #   (this seems to return a redirect to a login URL)
-        url1 = "/authorize"
-        payload1 = (
-            "response_type=code&client_id="
-            + client_id
-            + "&redirect_uri="
-            + redirect_uri
-            + "&scope="
-            + scope
-            + "&state="
-            + state
+    def _is_token_expired(self, token_data):
+        """Check if the access token is expired or about to expire."""
+        if "expires_at" in token_data:
+            # Token has explicit expiry timestamp
+            expires_at = token_data["expires_at"]
+            return datetime.now().timestamp() >= expires_at - 60  # 60s buffer
+        elif "expires_in" in token_data and "issued_at" in token_data:
+            # Calculate expiry from issued_at + expires_in
+            expires_at = token_data["issued_at"] + token_data["expires_in"]
+            return datetime.now().timestamp() >= expires_at - 60
+        # If no expiry info, assume expired to be safe
+        return True
+
+    def _refresh_tokens(self, token_data):
+        """Refresh OAuth tokens using refresh_token."""
+        if "refresh_token" not in token_data:
+            print("No refresh token available")
+            return None
+
+        try:
+            # Use authlib to refresh tokens
+            session = OAuth2Session(
+                client_id=self.CLIENT_ID,
+                token=token_data,
+                token_endpoint=self.TOKEN_URL
+            )
+            new_token = session.refresh_token(self.TOKEN_URL)
+
+            # Save the new tokens
+            self._save_tokens(new_token)
+            print("Token refresh successful")
+            return new_token
+        except Exception as e:
+            print(f"Token refresh failed: {e}")
+            return None
+
+    def get_auth0_tokens(self, browser):
+        """
+        Perform browser-based OAuth2 authentication using Auth0.
+        Uses authlib for proper OAuth2 flow with browser-based user interaction.
+
+        Args:
+            browser: Browser to use ('firefox', 'chrome', or 'chromium')
+
+        Returns:
+            dict: Token data including access_token, id_token, refresh_token, and expiry info
+        """
+        # Create OAuth2 session with authlib
+        session = OAuth2Session(
+            client_id=self.CLIENT_ID,
+            redirect_uri=self.REDIRECT_URI,
+            scope=" ".join(self.SCOPE_LIST),
         )
-        # print(url1 + "?" + payload1)
-        conn.request("GET", url1 + "?" + payload1)
-        response = self.get_response(conn)
-        # print( response )
 
-        # Step 2: open a browser, and display the login URL
-        rstr = "Found. Redirecting to "
-        if response.find(rstr) != -1:
-            url2 = response.split(rstr)[1]
-            driver = browsers[browser]
-            url2 = "https://" + host + url2
-            driver.get(url2)
-        else:
-            print("ERROR: request for authorisation did not return a valid login URL")
-            return
+        # Generate authorization URL
+        authorization_url, state = session.create_authorization_url(self.AUTH_URL)
+        print(f"Authorization URL: {authorization_url[:100]}...")
 
-        # Step 3: wait for the URL in the browser to change (i.e. the user has entered their login information, hopefully correctly!),
-        #   and then close the browser
-        response = driver.current_url
-        while response == url2:
-            sleep(1)
-            response = driver.current_url
-        driver.close()
+        # Setup browser with automatic driver management
+        if browser == "firefox":
+            options = webdriver.FirefoxOptions()
+            service = FirefoxService("/snap/bin/geckodriver")
+            driver = webdriver.Firefox(service=service, options=options)
+        else:  # chrome or chromium
+            options = webdriver.ChromeOptions()
+            options.add_experimental_option("excludeSwitches", ["enable-logging"])
 
-        # Step 4: attempt to extract the auth0 code from the URL the browser was directed to,
-        #   and use if to request (finally!) the id_token needed to register with smartlink.flexlib.com
-        rstr = "code="
-        if response.find(rstr) != -1:
-            code = response.split(rstr)[1]
-            url3 = "/frtest.auth0.com/oauth/token"
-            headers3 = {"content-type": "application/x-www-form-urlencoded"}
-            payload3 = (
-                "response_type=token&client_id="
-                + client_id
-                + "&redirect_uri="
-                + redirect_uri
-                + "&scope="
-                + scope
-                + "&state="
-                + state
-                + "&grant_type=authorization_code&code="
-                + code
+            if browser == "chromium":
+                try:
+                    options.binary_location = "/snap/bin/chromium"
+                except:
+                    pass  # Fall back to Chrome if Chromium not found
+
+            service = ChromeService(ChromeDriverManager().install())
+            driver = webdriver.Chrome(service=service, options=options)
+
+        try:
+            # Open browser for user to log in
+            print("Opening browser for authentication...")
+            driver.get(authorization_url)
+
+            # Wait for redirect (user completes login)
+            initial_url = driver.current_url
+            while driver.current_url == initial_url or not driver.current_url.startswith(
+                self.REDIRECT_URI
+            ):
+                sleep(0.5)
+
+            # Get the redirect URL containing the authorization code
+            redirect_response = driver.current_url
+            print(f"Received redirect: {redirect_response[:80]}...")
+
+        finally:
+            driver.quit()
+
+        # Extract authorization code and exchange for tokens using authlib
+        try:
+            token = session.fetch_token(
+                self.TOKEN_URL, authorization_response=redirect_response
             )
-            conn.request("POST", url3, payload3, headers3)
-            response = self.get_response(conn)
-            # print( response )
-        else:
+
+            # Add timestamp for expiry tracking
+            token["issued_at"] = datetime.now().timestamp()
+            if "expires_in" in token:
+                token["expires_at"] = token["issued_at"] + token["expires_in"]
+
             print(
-                "ERROR: code was not returned during the login attempt; was your login incorrect?"
+                f"Successfully obtained tokens (expires in {token.get('expires_in', 'unknown')}s)"
             )
-            return
+            if "refresh_token" in token:
+                print("Refresh token obtained - subsequent logins will be automatic")
 
-            # Step 5: attempt to extract the token data (in particular, id_token) from the auth0 server's response
-        rstr = '"id_token":"'
-        if response.find(rstr) != -1:
-            response = loads(response)
-            # print( "id_token is:", response[ "id_token" ] )
-            return response
-        else:
-            print("ERROR: id_token was not returned by the auth0 server")
-            return
+            return token
+
+        except Exception as e:
+            print(f"ERROR: Failed to exchange authorization code for tokens: {e}")
+            return None
 
     def get_response(self, conn):
         res = conn.getresponse()
@@ -228,6 +302,14 @@ class SmartLink(object):
             if radio["serial"] == serial_no:
                 return radio
         raise ValueError("Requested serial number not in authorized list")
+
+    def clear_cached_tokens(self):
+        """Clear cached OAuth tokens from keyring. Useful for debugging or forcing re-authentication."""
+        try:
+            keyring.delete_password(self.KEYRING_SERVICE, self.KEYRING_USERNAME)
+            print("Cached tokens cleared")
+        except Exception as e:
+            print(f"Note: No cached tokens to clear ({e})")
 
     def CloseLink(self):
         self.pingThread.running = False

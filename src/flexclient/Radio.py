@@ -27,7 +27,7 @@ class Radio(object):
         context.check_hostname = False
         context.verify_mode = ssl.CERT_NONE
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.FLEX_Sock = ssl.wrap_socket(
+        self.FLEX_Sock = context.wrap_socket(
             self.sock
         )  # socket to comms with the FLEX radio
         self.DATA_Sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)

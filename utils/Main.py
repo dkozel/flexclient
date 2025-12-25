@@ -16,7 +16,7 @@ SERIAL = os.getenv("FLEX_SERIAL_NUMBER", default=None)
 if SERIAL is None:
     print("Environment variable FLEX_SERIAL_NUMBER not found")
     exit()
-smartlink = SmartLink()
+smartlink = SmartLink(browser="firefox")
 radioInfo = smartlink.GetRadioFromAvailable(SERIAL)
 if radioInfo is None:
     print("Failed to retrieve Radio Info, exiting")

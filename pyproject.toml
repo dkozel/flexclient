@@ -1,6 +1,94 @@
 [build-system]
-requires = [
-    "setuptools>=42",
-    "wheel"
-]
+requires = ["setuptools>=61.0", "wheel"]
 build-backend = "setuptools.build_meta"
+
+[project]
+name = "flexclient"
+version = "0.1.0"
+description = "Python client API for the FLEX 6000 series radios"
+readme = "README.md"
+requires-python = ">=3.8"
+license = {text = "GPL-3.0-or-later"}
+authors = [
+    {name = "Open Research Institute", email = "steve@conklinhouse.com"}
+]
+maintainers = [
+    {name = "Open Research Institute", email = "steve@conklinhouse.com"}
+]
+keywords = ["flexradio", "sdr", "radio", "flex-6000", "smartlink"]
+classifiers = [
+    "Development Status :: 2 - Pre-Alpha",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)",
+    "Operating System :: OS Independent",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "Topic :: Communications :: Ham Radio",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
+
+dependencies = [
+    "authlib>=1.3.2",
+    "keyring>=25.5.0",
+    "matplotlib>=3.7.5",
+    "numpy>=1.24.4",
+    "scipy>=1.10.1",
+    "selenium>=4.0.0",
+    "webdriver-manager>=4.0.2",
+    "websocket-client>=1.0.0",
+]
+
+[project.optional-dependencies]
+# Development dependencies
+dev = [
+    "black>=22.0.0",
+    "pytest>=7.0.0",
+    "pytest-cov>=3.0.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/phase4ground/flexclient"
+"Bug Tracker" = "https://github.com/phase4ground/flexclient/issues"
+Repository = "https://github.com/phase4ground/flexclient"
+Documentation = "https://github.com/phase4ground/flexclient#readme"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+zip-safe = false
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.black]
+line-length = 88
+target-version = ['py38', 'py39', 'py310', 'py311', 'py312']
+include = '\.pyi?$'
+extend-exclude = '''
+/(
+  # directories
+  \.eggs
+  | \.git
+  | \.hg
+  | \.mypy_cache
+  | \.tox
+  | \.venv
+  | build
+  | dist
+)/
+'''
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py", "*_test.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = [
+    "--strict-markers",
+    "--strict-config",
+    "--cov=flexclient",
+]
