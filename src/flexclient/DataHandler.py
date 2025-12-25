@@ -1,3 +1,4 @@
+import logging
 import select
 import threading
 from struct import iter_unpack, unpack
@@ -6,6 +7,8 @@ from .Panafall import Panafall
 from .RxRemoteAudioStream import RxRemoteAudioStream
 from .Slice import Slice
 from .Vita import VitaPacket
+
+logger = logging.getLogger(__name__)
 
 
 class ReceiveData(threading.Thread):
@@ -43,10 +46,10 @@ class ReceiveData(threading.Thread):
 
 
 def ParseRead(radio, string):
-    # print(string)
+    logger.trace("Received: %s", string)
     read_type = string[0]
     if read_type == "R":
-        print(string)
+        logger.info("Response: %s", string)
         ParseResponse(radio, string)
     elif read_type == "S":
         ParseStatus(radio, string)
@@ -57,14 +60,14 @@ def ParseRead(radio, string):
     elif read_type == "V":
         ParseVersion(radio, string)
     else:
-        print("Unknown response from radio: " + radio.radioData["serial"])
+        logger.error("Unknown response from radio: %s", radio.radioData["serial"])
 
 
 def ParseResponse(radio, string):
     try:
         (response_code, hex_code, rec_msg) = string.split("|")
     except ValueError:
-        print("Error - Incomplete reply")
+        logger.error("Error - Incomplete reply: %s", string)
         return
 
     response_code = int(response_code[1:])
@@ -73,7 +76,7 @@ def ParseResponse(radio, string):
     try:
         sent_msg = radio.ResponseList[response_code]
     except ValueError:
-        print("Unexpected reply")
+        logger.warning("Unexpected reply: %s", string)
 
     if "slice c" in sent_msg:
         if hex_code != 0:
@@ -85,7 +88,7 @@ def ParseResponse(radio, string):
                 radio, float(slice_data["freq"]), slice_data["ant"], slice_data["mode"]
             )
             radio.SliceList.append(newSlice)
-            print("New Slice Added:", newSlice, newSlice.slice_id)
+            logger.info("New Slice Added: %s, slice_id=%s", newSlice, newSlice.slice_id)
     elif "slice r" in sent_msg:
         if hex_code != 0:
             # log error
@@ -184,7 +187,7 @@ def ParseStatus(radio, string):
     try:
         (radio_handle, rec_msg) = string.split("|")
     except ValueError:
-        print("Error - Invalid status message")
+        logger.error("Error - Invalid status message: %s", string)
         return
 
     if rec_msg.startswith("slice"):
@@ -262,7 +265,7 @@ def ParseMessage(radio, string):
     try:
         (MessageNum, rec_msg) = string.split("|")
     except ValueError:
-        print("Error - Invalid message")
+        logger.error("Error - Invalid message: %s", string)
         return
 
     # add rec_msg to log - logging.addMessage()
@@ -275,12 +278,12 @@ def ParseHandle(radio, string):
     if len(string) >= 8:
         radio.ClientHandle = string[1:9]
     else:
-        print("Error - Invalid handle returned")
+        logger.error("Error - Invalid handle returned: %s", string)
 
 
 def ParseVersion(radio, string):
     radio.clientHandle = string.split("H")[1].strip()
-    print("New Client Handle: " + radio.clientHandle)
+    logger.info("New Client Handle: %s", radio.clientHandle)
 
 
 def ParseVitaPacket(radio, packet):
@@ -469,7 +472,7 @@ def ValidatePacketCount(pkt_id, pkt_cnt):
     # Add more packet types when required
 
     if Error:
-        print("D", end="")
+        logger.debug("Dropped packet detected")
 
 
 def Scaler(xold, rmin, rmax, tmin, tmax):

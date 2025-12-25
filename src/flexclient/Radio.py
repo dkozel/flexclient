@@ -1,8 +1,11 @@
+import logging
 import socket
 import ssl
 
 from .Panafall import Panafall
 from .Slice import Slice
+
+logger = logging.getLogger(__name__)
 
 
 class Radio:
@@ -61,7 +64,7 @@ class Radio:
             + str(hp_port)
             + "\n"
         )
-        print("\nSending connect message: " + command)
+        logger.info("Sending connect message: %s", command.strip())
         self.smartlink_sock.send(command.encode("cp1252"))
         handle_data = self.smartlink_sock.recv(128).decode("cp1252")
         # print(handle_data)
@@ -69,12 +72,12 @@ class Radio:
             handle = handle_data.split("handle=")[1].strip()
             return handle
         except IndexError:
-            print("Server Handle not received")
+            logger.error("Server Handle not received")
             return ""
 
     def WanValidate(self):
         command = "wan validate handle=" + self.serverHandle + "\n"
-        print("\nSending Wan Validate command: " + command + "\n")
+        logger.info("Sending Wan Validate command: %s", command.strip())
         self.SendCommand(command)
 
     def OpenUDPConnection(self):
@@ -89,18 +92,18 @@ class Radio:
             udp_command.encode("cp1252"), (self.radioData["public_ip"], int(udp_port))
         )
         self.UdpListening = True
-        print("UDP connection opened")
+        logger.info("UDP connection opened")
 
     def CloseUDPConnection(self):
         self.UdpListening = False
-        print("UDP connection closed")
+        logger.info("UDP connection closed")
 
     def SendCommand(self, string):
         self.cmdCnt += 1
         self.ResponseList[self.cmdCnt] = (
             string  # expecting a response back from the radio regarding this command
         )
-        print("C" + str(self.cmdCnt) + "|" + string)
+        logger.debug("C%d|%s", self.cmdCnt, string.strip())
         command = ("C" + str(self.cmdCnt) + "|" + string + "\n").encode("cp1252")
         self.FLEX_Sock.send(command)
 
@@ -122,8 +125,7 @@ class Radio:
             command = "stream remove 0x" + self.RxAudioStreamer.stream_id
             self.SendCommand(command)
         except AttributeError:
-            # log error
-            print("Radio does not have an audio stream to remove!")
+            logger.error("Radio does not have an audio stream to remove!")
 
     """				"""
 
@@ -185,8 +187,7 @@ class Radio:
             command = "display panf r " + self.Panafall.panadapter_id
             self.SendCommand(command)
         except AttributeError:
-            # log error
-            print("Radio does not a have Panafall object to remove!")
+            logger.error("Radio does not a have Panafall object to remove!")
 
     """ 			"""
 

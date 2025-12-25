@@ -1,4 +1,5 @@
 import json
+import logging
 import select
 import socket
 import ssl
@@ -14,6 +15,8 @@ from selenium import (  # Needed to instantiate a browser whose current URL may 
 from selenium.webdriver.chrome.service import Service as ChromeService
 from selenium.webdriver.firefox.service import Service as FirefoxService
 from webdriver_manager.chrome import ChromeDriverManager
+
+logger = logging.getLogger(__name__)
 
 
 class PingServer(threading.Thread):
@@ -31,7 +34,7 @@ class PingServer(threading.Thread):
                 self.socket.send("ping from client\n".encode("cp1252"))
             except (ssl.SSLEOFError, OSError, BrokenPipeError) as e:
                 # Socket closed or connection lost, stop pinging
-                print(f"Ping thread: connection lost ({e}), stopping pings")
+                logger.error("Ping thread: connection lost (%s), stopping pings", e)
                 break
             sleep(5)
         # print("\n...Thread ended...\n")
@@ -67,21 +70,21 @@ class SmartLink:
         if not force_login:
             token_data = self._load_tokens()
             if token_data:
-                print("Using cached authentication tokens")
+                logger.info("Using cached authentication tokens")
                 # Try to refresh if expired
                 if self._is_token_expired(token_data):
-                    print("Token expired, attempting refresh...")
+                    logger.info("Token expired, attempting refresh...")
                     token_data = self._refresh_tokens(token_data)
                     if not token_data:
-                        print("Refresh failed, will re-authenticate")
+                        logger.warning("Refresh failed, will re-authenticate")
 
         # If no valid cached tokens, do browser login
         if not token_data:
-            print("Starting browser-based authentication...")
+            logger.info("Starting browser-based authentication...")
             token_data = self.get_auth0_tokens(browser)
             if token_data:
                 self._save_tokens(token_data)
-                print("Authentication successful, tokens cached")
+                logger.info("Authentication successful, tokens cached")
 
         if not token_data:
             raise Exception("Authentication failed - no valid tokens obtained")
@@ -112,7 +115,7 @@ class SmartLink:
             if token_json:
                 return json.loads(token_json)
         except Exception as e:
-            print(f"Warning: Could not load cached tokens: {e}")
+            logger.warning("Could not load cached tokens: %s", e)
         return None
 
     def _save_tokens(self, token_data):
@@ -123,7 +126,7 @@ class SmartLink:
                 self.KEYRING_SERVICE, self.KEYRING_USERNAME, token_json
             )
         except Exception as e:
-            print(f"Warning: Could not save tokens to keyring: {e}")
+            logger.warning("Could not save tokens to keyring: %s", e)
 
     def _is_token_expired(self, token_data):
         """Check if the access token is expired or about to expire."""
@@ -141,7 +144,7 @@ class SmartLink:
     def _refresh_tokens(self, token_data):
         """Refresh OAuth tokens using refresh_token."""
         if "refresh_token" not in token_data:
-            print("No refresh token available")
+            logger.debug("No refresh token available")
             return None
 
         try:
@@ -155,10 +158,10 @@ class SmartLink:
 
             # Save the new tokens
             self._save_tokens(new_token)
-            print("Token refresh successful")
+            logger.info("Token refresh successful")
             return new_token
         except Exception as e:
-            print(f"Token refresh failed: {e}")
+            logger.error("Token refresh failed: %s", e)
             return None
 
     def get_auth0_tokens(self, browser):
@@ -181,7 +184,7 @@ class SmartLink:
 
         # Generate authorization URL
         authorization_url, state = session.create_authorization_url(self.AUTH_URL)
-        print(f"Authorization URL: {authorization_url[:100]}...")
+        logger.info("Authorization URL: %s...", authorization_url[:100])
 
         # Setup browser with automatic driver management
         if browser == "firefox":
@@ -203,7 +206,7 @@ class SmartLink:
 
         try:
             # Open browser for user to log in
-            print("Opening browser for authentication...")
+            logger.info("Opening browser for authentication...")
             driver.get(authorization_url)
 
             # Wait for redirect (user completes login)
@@ -216,7 +219,7 @@ class SmartLink:
 
             # Get the redirect URL containing the authorization code
             redirect_response = driver.current_url
-            print(f"Received redirect: {redirect_response[:80]}...")
+            logger.info("Received redirect: %s...", redirect_response[:80])
 
         finally:
             driver.quit()
@@ -232,16 +235,21 @@ class SmartLink:
             if "expires_in" in token:
                 token["expires_at"] = token["issued_at"] + token["expires_in"]
 
-            print(
-                f"Successfully obtained tokens (expires in {token.get('expires_in', 'unknown')}s)"
+            logger.info(
+                "Successfully obtained tokens (expires in %ss)",
+                token.get("expires_in", "unknown"),
             )
             if "refresh_token" in token:
-                print("Refresh token obtained - subsequent logins will be automatic")
+                logger.info(
+                    "Refresh token obtained - subsequent logins will be automatic"
+                )
 
             return token
 
         except Exception as e:
-            print(f"ERROR: Failed to exchange authorization code for tokens: {e}")
+            logger.error(
+                "Failed to exchange authorization code for tokens: %s", e, exc_info=True
+            )
             return None
 
     def get_response(self, conn):
@@ -261,8 +269,8 @@ class SmartLink:
         )
         radioData = []
         if self.wrapped_server_sock.version() is not None:
-            # print(self.wrapped_server_sock.version())
-            print(command)
+            # logger.debug("Socket version: %s", self.wrapped_server_sock.version())
+            logger.debug("Sending command: %s", command.strip())
             self.wrapped_server_sock.send(command.encode("cp1252"))
             """ Communicate with SmartLink Server """
             inputs = [self.wrapped_server_sock]
@@ -272,7 +280,7 @@ class SmartLink:
 
                 for s in readable:
                     data = s.recv(1024).decode("utf-8")
-                    print(data)
+                    logger.info("Received from server: %s", data.strip())
                     if "radio_name" in data:
                         radioData.append(self.ParseRadios(data))
                     # else:
@@ -283,7 +291,7 @@ class SmartLink:
                     inputs.clear()
 
         else:
-            print("Socket connection not established....")
+            logger.error("Socket connection not established")
 
         return radioData
 
@@ -315,9 +323,9 @@ class SmartLink:
         """Clear cached OAuth tokens from keyring. Useful for debugging or forcing re-authentication."""
         try:
             keyring.delete_password(self.KEYRING_SERVICE, self.KEYRING_USERNAME)
-            print("Cached tokens cleared")
+            logger.info("Cached tokens cleared")
         except Exception as e:
-            print(f"Note: No cached tokens to clear ({e})")
+            logger.info("Note: No cached tokens to clear (%s)", e)
 
     def CloseLink(self):
         self.pingThread.running = False

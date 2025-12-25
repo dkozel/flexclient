@@ -1,3 +1,8 @@
+import logging
+
+logger = logging.getLogger(__name__)
+
+
 class VitaPacket:
     """class to parse a vita packet"""
 
@@ -12,4 +17,6 @@ class VitaPacket:
         self.payload = data[28 : self.pkt_size + 1]
 
         if self.pkt_size != len(data):
-            print("Packet length error")
+            logger.warning(
+                "Packet length error: expected %d, got %d", self.pkt_size, len(data)
+            )
