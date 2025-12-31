@@ -22,12 +22,6 @@ repos:
         name: isort (python)
         args: ["--profile", "black"]
 
-  # Python code formatting
-  - repo: https://github.com/psf/black
-    rev: 25.12.0
-    hooks:
-      - id: black
-
   # Python linting and auto-fixing
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.14.10

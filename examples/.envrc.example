@@ -1,0 +1,14 @@
+# Example environment configuration for FlexClient
+# Copy this file to .envrc and edit with your values
+
+# Your radio's serial number (required)
+export FLEX_SERIAL_NUMBER="1234-5678-9012-3456"
+
+# Optional: Matplotlib backend (if plots don't appear)
+# export MPLBACKEND=TkAgg
+
+# Optional: Logging level
+# export FLEXCLIENT_LOG_LEVEL=INFO
+
+# Optional: Browser for OAuth login (firefox or chrome)
+# export FLEXCLIENT_BROWSER=firefox
